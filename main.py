@@ -1,12 +1,15 @@
 import aiohttp
+import asyncio
+
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.core import AstrBotConfig
-from bilibili_api import user, sync
-import asyncio
-from datetime import datetime, timedelta
 from astrbot.api.event import MessageChain
+
+from datetime import datetime, timedelta
+from bilibili_api import user
+
 
 def get_original_umo(event: AstrMessageEvent) -> str:
     return f"{event.get_platform_name()}:{event.message_obj.type.value}:{event.message_obj.session_id}"
@@ -19,6 +22,7 @@ class UPfansWatcher(Star):
 
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
+        self.session = aiohttp.ClientSession()
         self.runtask = asyncio.create_task(self.task_run())
         logger.info("已启动")
 
@@ -120,15 +124,19 @@ class UPfansWatcher(Star):
         """获取UP粉丝数"""
         # 使用Bilibili-API-Python获取UP的粉丝数，暂时没看到要Cookie鉴权，那就直接用官方接口拉取吧~
         u = user.User(uid)
-        return sync(u.get_relation_info())["follower"]
+        result = await u.get_relation_info()
+        return result["follower"]
 
     async def get_upname(self, uid: int):
         """获取UP昵称"""
         # 使用官方API需要Cookie，这里采用第三方（Uapi）来获取UP的昵称，免去了鉴权（不知道这个API平台到时候要不要API-KEY）
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f'https://uapis.cn/api/v1/social/bilibili/userinfo?uid={uid}') as resp:
+        try:
+            async with self.session.get(f'https://uapis.cn/api/v1/social/bilibili/userinfo?uid={uid}') as resp:
                 data = await resp.json()
                 return data["name"]
+        except Exception as e:
+            logger.error(f"获取UP昵称时出现错误: {e}")
+            return "获取UP昵称时出现错误"
 
     async def fans_compare(self, uid: int):
         """返回UP粉丝数比较结果内容"""
@@ -259,4 +267,5 @@ class UPfansWatcher(Star):
         for task in self.running_tasks:
             task.cancel()
         self.runtask.cancel()
+        await self.session.close()
         logger.info("已取消所有任务。")
