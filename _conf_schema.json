@@ -1,0 +1,10 @@
+{
+  "uplist": {
+    "description": "要监控的B站up列表",
+    "hint": "要监控的B站up的UID、间隔时间、推送群聊等配置（UID和间隔时间纯数字即可，UID无需输入“UID”前缀）",
+    "type": "string",
+    "editor_mode": "True",
+    "editor_language": "json",
+    "default": []
+  }
+}
