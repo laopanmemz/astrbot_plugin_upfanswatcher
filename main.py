@@ -9,7 +9,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, register
 from astrbot.core import AstrBotConfig
 
-
+# 手动构建不包含消息隔离特征的unified_msg_origin（umo）获取方法
 def get_original_umo(event: AstrMessageEvent) -> str:
     return f"{event.get_platform_name()}:{event.message_obj.type.value}:{event.message_obj.session_id}"
 
@@ -330,7 +330,6 @@ class UPfansWatcher(Star):
     @bwatch.command("test", alias={"check", "测试", "检查"})
     async def test(self, event: AstrMessageEvent):
         """获取并发送一次监控结果以测试"""
-        print(event.message_obj.session_id)
         found = False
         for i in self.config["uplist"]:
             if i["umo"] != get_original_umo(event):
