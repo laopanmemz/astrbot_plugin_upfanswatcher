@@ -14,7 +14,7 @@ from bilibili_api import user
 def get_original_umo(event: AstrMessageEvent) -> str:
     return f"{event.get_platform_name()}:{event.message_obj.type.value}:{event.message_obj.session_id}"
 
-@register("astrbot_plugin_upfanswatcher", "laopanmemz", "b站粉丝数定时推送", "1.0.0")
+@register("astrbot_plugin_upfanswatcher", "laopanmemz", "b站粉丝数定时推送", "1.0.1")
 class UPfansWatcher(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -136,7 +136,13 @@ class UPfansWatcher(Star):
                 return data["name"]
         except Exception as e:
             logger.error(f"获取UP昵称时出现错误: {e}")
-            return "获取UP昵称时出现错误"
+            try:
+                async with self.session.get(f'https://api.chyt.top/get_bilibili_info?mid={uid}') as resp:
+                    data = await resp.json()
+                    return data["username"]
+            except Exception as e:
+                logger.error(f"获取UP昵称时再次出现错误: {e}")
+                return "获取UP昵称时出现错误"
 
     async def fans_compare(self, uid: int):
         """返回UP粉丝数比较结果内容"""

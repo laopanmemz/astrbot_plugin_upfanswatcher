@@ -1,6 +1,6 @@
 name: astrbot_plugin_upfanswatcher
 display_name: astrbot_plugin_upfanswatcher
 desc: b站up粉丝数定时推送
-version: v1.0.0
+version: v1.0.1
 author: laopanmemz
 repo: https://github.com/laopanmemz/astrbot_plugin_upfanswatcher
