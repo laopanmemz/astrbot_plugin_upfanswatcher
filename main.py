@@ -1,20 +1,20 @@
-import aiohttp
 import asyncio
-
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
-from astrbot.core import AstrBotConfig
-from astrbot.api.event import MessageChain
-
 from datetime import datetime, timedelta
+
+import aiohttp
 from bilibili_api import user
+
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
+from astrbot.api.star import Context, Star, register
+from astrbot.core import AstrBotConfig
 
 
 def get_original_umo(event: AstrMessageEvent) -> str:
     return f"{event.get_platform_name()}:{event.message_obj.type.value}:{event.message_obj.session_id}"
 
-@register("astrbot_plugin_upfanswatcher", "laopanmemz", "b站粉丝数定时推送", "1.0.1")
+
+@register("astrbot_plugin_upfanswatcher", "laopanmemz", "b站粉丝数定时推送", "1.0.2")
 class UPfansWatcher(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -50,41 +50,64 @@ class UPfansWatcher(Star):
 
     async def _run_periodic_tasks(self, interval_minutes, items):
         """根据指定的时间间隔运行周期性任务"""
-        logger.debug(f"_run_periodic_tasks: interval_minutes:{interval_minutes}, items: {items}")
+        logger.debug(
+            f"_run_periodic_tasks: interval_minutes:{interval_minutes}, items: {items}"
+        )
         while True:
             try:
                 # 计算距离下一个整点执行时间的延迟
                 now = datetime.now()
                 # 计算从今天0点开始，经过了几个interval_minutes的时间段
                 total_minutes_since_midnight = now.hour * 60 + now.minute
-                next_check_offset = ((total_minutes_since_midnight // interval_minutes) + 1) * interval_minutes
+                next_check_offset = (
+                    (total_minutes_since_midnight // interval_minutes) + 1
+                ) * interval_minutes
                 # 计算下次执行的具体时间
                 next_run_hour = next_check_offset // 60
                 next_run_minute = next_check_offset % 60
-                logger.debug(f"_run_periodic_tasks: next_run_time: {next_run_hour}, next_run_minute: {next_run_minute}")
+                logger.debug(
+                    f"_run_periodic_tasks: next_run_time: {next_run_hour}, next_run_minute: {next_run_minute}"
+                )
 
                 # 如果小时超过24，则调整为明天的时间
                 if next_run_hour >= 24:
                     next_run_hour -= 24
                     # 这里简单处理，实际应用中可能需要更精确的时间计算
-                    next_run_time = datetime(now.year, now.month, now.day, next_run_hour, next_run_minute)
+                    next_run_time = datetime(
+                        now.year, now.month, now.day, next_run_hour, next_run_minute
+                    )
                     if next_run_time <= now:
                         next_run_time += timedelta(days=1)
                 else:
-                    next_run_time = datetime(now.year, now.month, now.day, next_run_hour, next_run_minute)
+                    next_run_time = datetime(
+                        now.year, now.month, now.day, next_run_hour, next_run_minute
+                    )
 
                 # 如果计算出的时间已经过了今天的范围，调整到明天
                 if next_run_time.date() == now.date() and next_run_time <= now:
-                    next_run_time = datetime(now.year, now.month, now.day, 0, 0) + timedelta(minutes=interval_minutes)
+                    next_run_time = datetime(
+                        now.year, now.month, now.day, 0, 0
+                    ) + timedelta(minutes=interval_minutes)
                     if next_run_time <= now:
                         # 如果还是小于等于当前时间，则跳转到下一个周期
-                        periods_passed = int((now - datetime(now.year, now.month, now.day, 0,
-                                                             0)).total_seconds() / 60 / interval_minutes) + 1
-                        next_run_time = datetime(now.year, now.month, now.day, 0, 0) + timedelta(
-                            minutes=periods_passed * interval_minutes)
+                        periods_passed = (
+                            int(
+                                (
+                                    now - datetime(now.year, now.month, now.day, 0, 0)
+                                ).total_seconds()
+                                / 60
+                                / interval_minutes
+                            )
+                            + 1
+                        )
+                        next_run_time = datetime(
+                            now.year, now.month, now.day, 0, 0
+                        ) + timedelta(minutes=periods_passed * interval_minutes)
 
                 delay = (next_run_time - now).total_seconds()
-                logger.debug(f"_run_periodic_tasks: next_run_time: {next_run_time}, delay: {delay}")
+                logger.debug(
+                    f"_run_periodic_tasks: next_run_time: {next_run_time}, delay: {delay}"
+                )
                 if delay > 0:
                     await asyncio.sleep(delay)
 
@@ -117,8 +140,7 @@ class UPfansWatcher(Star):
         if should_send:
             message_chain = MessageChain().message(result)
             await self.context.send_message(umo, message_chain)
-            logger.info(f"已发送消息")
-
+            logger.info("已发送消息")
 
     async def get_upfans(self, uid: int):
         """获取UP粉丝数"""
@@ -131,30 +153,49 @@ class UPfansWatcher(Star):
         """获取UP昵称"""
         # 使用官方API需要Cookie，这里采用第三方（Uapi）来获取UP的昵称，免去了鉴权（不知道这个API平台到时候要不要API-KEY）
         try:
-            async with self.session.get(f'https://uapis.cn/api/v1/social/bilibili/userinfo?uid={uid}') as resp:
+            async with self.session.get(
+                f"https://uapis.cn/api/v1/social/bilibili/userinfo?uid={uid}"
+            ) as resp:
                 data = await resp.json()
+                await self.put_kv_data(
+                    f"{str(uid)}_name", data["name"]
+                )  # 将本次成功获取的值持久化存储
                 return data["name"]
         except Exception as e:
             logger.error(f"获取UP昵称时出现错误: {e}")
             try:
-                async with self.session.get(f'https://api.chyt.top/get_bilibili_info?mid={uid}') as resp:
+                async with self.session.get(
+                    f"https://api.chyt.top/get_bilibili_info?mid={uid}"
+                ) as resp:
                     data = await resp.json()
+                    await self.put_kv_data(
+                        f"{str(uid)}_name", data["name"]
+                    )  # 将本次成功获取的值持久化存储
                     return data["username"]
             except Exception as e:
-                logger.error(f"获取UP昵称时再次出现错误: {e}")
-                return "获取UP昵称时出现错误"
+                logger.error(
+                    f"获取UP昵称时再次出现错误，尝试读取上一次获取结果缓存值。以下为错误信息: {e}"
+                )
+                cache_name = await self.get_kv_data(
+                    f"{str(uid)}_name", None
+                )  # 尝试读取持久化信息
+                if cache_name is not None:  # 若获取到，返回值
+                    return cache_name
+                else:
+                    return "获取UP昵称时出现错误"
+                # 实在获取不到了，直接返回错误
 
     async def fans_compare(self, uid: int):
         """返回UP粉丝数比较结果内容"""
-        fans = await self.get_upfans(uid) # 获取当前最新UP粉丝数
-        name = await self.get_upname(uid) # 获取当前最新UP名称
+        fans = await self.get_upfans(uid)  # 获取当前最新UP粉丝数
+        name = await self.get_upname(uid)  # 获取UP名称
         old_fanscount = await self.get_kv_data(str(uid), None)
-        
+
         # 首次获取，没有旧数据
         if old_fanscount is None:
             await self.put_kv_data(str(uid), fans)
             return f"{name}(UID{uid}) 首次获取粉丝数：{fans}"
-        
+
         if fans > old_fanscount:
             await self.put_kv_data(str(uid), fans)
             return f"🌟 {name}(UID{uid}) 的粉丝数已从 {old_fanscount} 增加至 {fans}，上涨{fans - old_fanscount}个"
@@ -171,7 +212,7 @@ class UPfansWatcher(Star):
         pass
 
     @filter.permission_type(filter.PermissionType.ADMIN)
-    @bwatch.command("add", alias={'添加'})
+    @bwatch.command("add", alias={"添加"})
     async def add(self, event: AstrMessageEvent, uid: str, time: str, ifequal: str):
         """
         添加UP
@@ -182,76 +223,111 @@ class UPfansWatcher(Star):
                 ifequal (str): 相等时是否推送（仅支持 true/false）
         """
         if not uid.isdigit() or not time.isdigit():
-            yield event.plain_result("请输入纯整数数字UID/时间。传入UID时不要带“UID”的前缀。")
+            yield event.plain_result(
+                "请输入纯整数数字UID/时间。传入UID时不要带“UID”的前缀。"
+            )
             event.stop_event()
             return
         if ifequal not in ["true", "false"]:
-            yield event.plain_result("“相等时是否推送” 参数应使用小写布尔值，仅传入 true(是) 或者 false(否)。")
+            yield event.plain_result(
+                "“相等时是否推送” 参数应使用小写布尔值，仅传入 true(是) 或者 false(否)。"
+            )
             event.stop_event()
             return
         uid_int = int(uid)
         time_int = int(time)
-        self.config["uplist"].append({"uid": uid_int, "time": time_int, "ifequal": ifequal, "umo": get_original_umo(event)})
+        self.config["uplist"].append(
+            {
+                "uid": uid_int,
+                "time": time_int,
+                "ifequal": ifequal,
+                "umo": get_original_umo(event),
+            }
+        )
         self.config.save_config()
         logger.info("添加后尝试重新载入任务")
         for task in self.running_tasks:
             task.cancel()
         self.runtask.cancel()
+        try:
+            await self.runtask  # 等待任务完全取消
+        except asyncio.CancelledError:
+            pass
         self.runtask = asyncio.create_task(self.task_run())
 
         ifequal_text = "是" if ifequal == "true" else "否"
-        yield event.plain_result(f"添加成功。请检查添加的配置：\n\nUID：{uid_int}\n\n检查间隔：{time}（分钟）\n\n相等时是否推送：{ifequal_text}")
+        yield event.plain_result(
+            f"添加成功。请检查添加的配置：\n\nUID：{uid_int}\n\n检查间隔：{time}（分钟）\n\n相等时是否推送：{ifequal_text}"
+        )
         event.stop_event()
         return
 
     @filter.permission_type(filter.PermissionType.ADMIN)
-    @bwatch.command("del", alias={'rm', 'remove', 'delete', '删除'})
+    @bwatch.command("del", alias={"rm", "remove", "delete", "删除"})
     async def delete(self, event: AstrMessageEvent, uid: str):
         """删除UP
-            Args:
-                uid (str): UP主的UID
+        Args:
+            uid (str): UP主的UID
         """
         if not uid.isdigit():
             yield event.plain_result("请输入纯数字UID，传入UID时不要带“UID”的前缀。")
             event.stop_event()
             return
         uid_int = int(uid)
-        if not any(d.get("uid") == uid_int and d.get("umo") == get_original_umo(event) for d in self.config["uplist"]):
+        if not any(
+            d.get("uid") == uid_int and d.get("umo") == get_original_umo(event)
+            for d in self.config["uplist"]
+        ):
             yield event.plain_result("该UID不存在于监控列表中。")
             event.stop_event()
             return
-        self.config["uplist"] = [i for i in self.config["uplist"] if i["uid"] != uid_int or i["umo"] != get_original_umo(event)]
+        self.config["uplist"] = [
+            i
+            for i in self.config["uplist"]
+            if i["uid"] != uid_int or i["umo"] != get_original_umo(event)
+        ]
         self.config.save_config()
         logger.info("删除后尝试重新载入任务")
         for task in self.running_tasks:
             task.cancel()
         self.runtask.cancel()
+        try:
+            await self.runtask  # 等待任务完全取消
+        except asyncio.CancelledError:
+            pass
         self.runtask = asyncio.create_task(self.task_run())
         yield event.plain_result("删除成功。")
         event.stop_event()
         return
 
     @filter.permission_type(filter.PermissionType.ADMIN)
-    @bwatch.command("list", alias={'ls', '列出'})
+    @bwatch.command("list", alias={"ls", "列出"})
     async def list(self, event: AstrMessageEvent):
         """列出所有UP"""
         # 只获取当前用户的监控项
-        current_user_items = [item for item in self.config["uplist"] if item["umo"] == get_original_umo(event)]
+        current_user_items = [
+            item
+            for item in self.config["uplist"]
+            if item["umo"] == get_original_umo(event)
+        ]
 
         if len(current_user_items) == 0:
             yield event.plain_result("没有添加任何监控对象。")
             event.stop_event()
             return
 
-        yield event.plain_result("检查列表：\n" + "\n".join(
-            f"UID：{item['uid']}，检查间隔：{item['time']}（分钟），相等时是否推送：{'是' if item['ifequal'] == 'true' else '否'}"
-            for item in current_user_items
-        ))
+        yield event.plain_result(
+            "检查列表：\n"
+            + "\n".join(
+                f"UID：{item['uid']}，检查间隔：{item['time']}（分钟），相等时是否推送：{'是' if item['ifequal'] == 'true' else '否'}"
+                for item in current_user_items
+            )
+        )
         event.stop_event()
         return
 
     @filter.permission_type(filter.PermissionType.ADMIN)
-    @bwatch.command("test", alias={'check', '测试', '检查'})
+    @bwatch.command("test", alias={"check", "测试", "检查"})
     async def test(self, event: AstrMessageEvent):
         """获取并发送一次监控结果以测试"""
         print(event.message_obj.session_id)
@@ -262,7 +338,7 @@ class UPfansWatcher(Star):
             found = True
             send_message = await self.fans_compare(i["uid"])
             yield event.plain_result(send_message)
-        
+
         if not found:
             yield event.plain_result("当前会话没有添加任何监控对象。")
         event.stop_event()
