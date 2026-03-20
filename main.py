@@ -169,7 +169,7 @@ class UPfansWatcher(Star):
                 ) as resp:
                     data = await resp.json()
                     await self.put_kv_data(
-                        f"{str(uid)}_name", data["name"]
+                        f"{str(uid)}_name", data["username"]
                     )  # 将本次成功获取的值持久化存储
                     return data["username"]
             except Exception as e:
