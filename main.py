@@ -14,7 +14,7 @@ def get_original_umo(event: AstrMessageEvent) -> str:
     return f"{event.get_platform_name()}:{event.message_obj.type.value}:{event.message_obj.session_id}"
 
 
-@register("astrbot_plugin_upfanswatcher", "laopanmemz", "b站粉丝数定时推送", "1.0.2")
+@register("astrbot_plugin_upfanswatcher", "laopanmemz", "b站粉丝数定时推送", "1.0.3")
 class UPfansWatcher(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -297,6 +297,66 @@ class UPfansWatcher(Star):
             pass
         self.runtask = asyncio.create_task(self.task_run())
         yield event.plain_result("删除成功。")
+        event.stop_event()
+        return
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @bwatch.command("set", alias={"change", "setting","设置", "修改", "重设", "变更"})
+    async def set(self, event: AstrMessageEvent, uid: str, time: str, ifequal: str):
+        """
+        设置UP
+            请以 bwatch set [uid] [time] [ifequal] 命令发送
+            Args:
+                uid (str): UP主的UID
+                time (str): 检查间隔时间（分钟）
+                ifequal (str): 相等时是否推送（仅支持 true/false）
+        """
+        if not uid.isdigit() or not time.isdigit():
+            yield event.plain_result(
+                "请输入纯整数数字UID/时间。传入UID时不要带“UID”的前缀。"
+            )
+            event.stop_event()
+            return
+        if ifequal not in ["true", "false"]:
+            yield event.plain_result(
+                "“相等时是否推送” 参数应使用小写布尔值，仅传入 true(是) 或者 false(否)。"
+            )
+            event.stop_event()
+            return
+        uid_int = int(uid)
+        time_int = int(time)
+        if not any(
+            d.get("uid") == uid_int and d.get("umo") == get_original_umo(event)
+            for d in self.config["uplist"]
+        ):
+            yield event.plain_result("该UID不存在于监控列表中。")
+            event.stop_event()
+            return
+        self.config["uplist"] = [
+            i
+            if i["uid"] != uid_int or i["umo"] != get_original_umo(event)
+            else {
+                "uid": uid_int,
+                "time": time_int,
+                "ifequal": ifequal,
+                "umo": get_original_umo(event),
+            }
+            for i in self.config["uplist"]
+        ]
+        self.config.save_config()
+        logger.info("修改后尝试重新载入任务")
+        for task in self.running_tasks:
+            task.cancel()
+        self.runtask.cancel()
+        try:
+            await self.runtask  # 等待任务完全取消
+        except asyncio.CancelledError:
+            pass
+        self.runtask = asyncio.create_task(self.task_run())
+        ifequal_text = "是" if ifequal == "true" else "否"
+        yield event.plain_result(
+            f"修改成功。请检查修改后的配置：\n\nUID：{uid_int}\n\n检查间隔：{time}（分钟）\n\n相等时是否推送：{ifequal_text}"
+        )
         event.stop_event()
         return
 

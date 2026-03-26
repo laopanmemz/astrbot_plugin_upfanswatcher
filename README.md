@@ -2,7 +2,7 @@
 
 插件可实现按指定分钟间隔推送b站up的粉丝数。
 
-插件依赖 `bilibili-api-python` 库，在AstrBot插件市场安装插件后，通常情况下，AstrBot会自动解决依赖问题，若未自动安装可自行在AstrBot Web控制台右上角手动安装。
+插件依赖 `bilibili-api-python` 库，在AstrBot插件市场安装插件后，通常情况下，AstrBot会自动解决依赖问题，若未自动安装可自行在AstrBot 仪表盘 - 平台日志，在右上角手动安装。
 
 ### 使用方法
 
@@ -12,23 +12,21 @@
 
 采用指令组 `/bwatch` ，指令组内所有指令均为**管理员指令**。
 
+> 预声明参数详情：
+>
+> ​	uid (str): UP主的UID（发送时无需带 `UID` 前缀，纯数字即可）
+>
+> ​	time (str): 检查间隔时间（分钟）
+>
+> ​	ifequal (str): 相等时是否推送（仅支持 `true/false`）
+
 此指令组的子指令：
 
 ​	`/bwatch add` 在当前会话中添加要监控的UP，指令规则为 `/bwatch add [uid] [time] [ifequal]` 
 
-​	uid (str): UP主的UID（发送时无需带 `UID` 前缀，纯数字即可）
-
-​	time (str): 检查间隔时间（分钟）
-
-​	ifequal (str): 相等时是否推送（仅支持 `true/false`）
-
-
+​	`/bwatch set` 在当前会话中修改要监控的UP的参数信息，指令规则为 `/bwatch set [uid] [time] [ifequal]` 
 
 ​	`/bwatch del` 删除当前会话中正在监控的UP，指令规则为 `/bwatch del [uid]` 
-
-​	uid (str): UP主的UID（发送时无需带 `UID` 前缀，纯数字即可）
-
-
 
 ​	`/bwatch list` 列出当前会话中所有正在监控的UP项。
 
